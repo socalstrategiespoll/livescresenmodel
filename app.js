@@ -11,6 +11,19 @@ let latest = null;
 function fmtPct(v) { return v === null || v === undefined ? "—" : v.toFixed(1) + "%"; }
 function fmtInt(v) { return v === null || v === undefined ? "—" : Math.round(v).toLocaleString(); }
 
+function fmtProb(v, pctIn) {
+  // Pre-election (no votes counted yet), never show a bare 100%/0% -- the
+  // simulation's shrinkage means those are the pre-election baseline
+  // ceiling/floor, not a certainty. Once real votes start coming in, show
+  // the simulated number as-is.
+  if (v === null || v === undefined) return "—";
+  if (!pctIn || pctIn <= 0) {
+    if (v >= 99.95) return ">99%";
+    if (v <= 0.05) return "<0.1%";
+  }
+  return v.toFixed(1) + "%";
+}
+
 async function fetchJSON(path) {
   const res = await fetch(API_BASE + path, { cache: "no-store" });
   if (!res.ok) throw new Error("HTTP " + res.status);
@@ -40,12 +53,13 @@ function renderVerdict(data) {
     ? pctIn.toFixed(1) + "% of projected vote counted"
     : "Pre-election baseline — no votes counted yet";
 
-  document.getElementById("p-runoff").textContent = data.runoff.p_runoff.toFixed(1) + "%";
+  document.getElementById("p-runoff").textContent = fmtProb(data.runoff.p_runoff, pctIn);
 }
 
 function renderAdvanceBars(data) {
   const container = document.getElementById("advance-bars");
   container.innerHTML = "";
+  const pctIn = data.counted.pct_of_projected_turnout;
   const order = [...CANDIDATES].sort((a, b) => data.runoff.advance[b] - data.runoff.advance[a]);
   order.forEach((c) => {
     const row = document.createElement("div");
@@ -54,7 +68,7 @@ function renderAdvanceBars(data) {
     row.innerHTML =
       '<span class="adv-name cand-' + c + '">' + LABELS[c] + '</span>' +
       '<span class="adv-track"><span class="adv-fill cand-' + c + '-bg" style="width:' + pct.toFixed(1) + '%"></span></span>' +
-      '<span class="adv-pct">' + pct.toFixed(1) + '%</span>';
+      '<span class="adv-pct">' + fmtProb(pct, pctIn) + '</span>';
     container.appendChild(row);
   });
 }
