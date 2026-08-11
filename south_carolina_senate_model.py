@@ -20,22 +20,34 @@ Both converge to 0/100 as reporting completes (see UNCERTAINTY SHRINKAGE
 below), so they're genuinely live, not just a pre-election fixed number
 that a results page ignores once votes start coming in.
 
-ARCHITECTURE (same three pieces as every model in this family)
+ARCHITECTURE (same three pieces as every model in this family, but with
+DEDUCTIVE remainder projection rather than a full-county blend -- see
+below for why this build differs from the rest of the family here)
 1. BASELINE -- sc_senate_gop_primary_baseline.csv from build_sc_senate_baseline.py,
    itself built from four different coalition-proxy source races (see that
-   file's docstring). This is a rougher foundation than a real poll and IS
-   NOT deductive: no county's projection is counted-votes-held-fixed plus a
-   remainder.
-2. CREDIBILITY-WEIGHTED BLEND -- each county's projection blends its own
-   observed results with a (shift-adjusted) baseline, at a weight that
-   grows with how much of that county has reported. A single large county
-   partially in is capped (MAX_SINGLE_COUNTY_SHARE) so it can't read as a
-   statewide pattern on its own.
+   file's docstring). This is a rougher foundation than a real poll.
+2. DEDUCTIVE COUNTY PROJECTION -- a county's counted votes are held FIXED,
+   exactly as reported, for every candidate. Only the REMAINING uncounted
+   portion of that county is projected, as a credibility-weighted blend of
+   the county's own raw observed shares and a (shift-adjusted) baseline:
+       remainder_shares = credibility * raw_shares + (1 - credibility) * shifted_baseline
+   where credibility grows from 0 toward 1 as more of the county reports
+   (pct_counted ** CREDIBILITY_EXPONENT) -- i.e. credibility is literally
+   "how close the still-uncounted votes should be assumed to run to the
+   votes already in." The county's final projected total is then
+       final_votes[cand] = counted_votes[cand] + remaining_votes * remainder_shares[cand]
+   At 0% reporting, credibility is 0 and the whole county (all of it
+   "remaining") is projected at the shifted baseline. At 100% reporting,
+   remaining is 0 and the county's projection is exactly its counted
+   votes -- nothing else can move it. A single large county partially in
+   is capped (MAX_SINGLE_COUNTY_SHARE) so it can't dominate the statewide
+   SHIFT below on its own.
 3. STATEWIDE SHIFT -- an evidence-weighted deviation (reporting counties'
    observed shares vs. their baseline shares) shrunk toward zero by
-   GLOBAL_EVIDENCE_PRIOR, then applied to every county (reporting or not)
-   before blending. A genuine multi-county pattern moves the shift well
-   before 100% is in; one outlier county mostly doesn't.
+   GLOBAL_EVIDENCE_PRIOR, then applied to the REMAINDER expectation of
+   every county (reporting or not) before blending. A genuine multi-county
+   pattern moves the shift well before 100% is in; one outlier county
+   mostly doesn't.
 
 UNCERTAINTY SHRINKAGE (new for this build). SIGMA_STATE and SIGMA_COUNTY
 (the Monte Carlo shock SDs -- see simulate_sc_senate.py for the original
@@ -79,8 +91,6 @@ GLOBAL_EVIDENCE_PRIOR = 55_000     # votes of evidence before the shift trusts
 REGIONAL_EVIDENCE_PRIOR = 9_000
 MAX_SINGLE_COUNTY_SHARE = 0.20     # cap on one county's share of total evidence weight
 CREDIBILITY_EXPONENT = 2.0
-MOMENTUM_MAX_DRIFT = 12.0          # points a well-reported county's blend can
-                                    # stray from its own raw results
 
 SIGMA_STATE_0 = 0.22               # pre-election statewide shock SD (logit scale)
 SIGMA_COUNTY_0 = 0.35              # pre-election county idiosyncratic shock SD
@@ -192,9 +202,12 @@ class SouthCarolinaSenateModel:
             out[region] = shift
         return out
 
-    # ---- per-county blended projection -----------------------------------
+    # ---- per-county deductive projection -----------------------------------
 
-    def project_shares(self, county: County) -> dict:
+    def remainder_shares(self, county: "County") -> dict:
+        """The projected split of that county's STILL-UNCOUNTED votes only
+        -- not its final total. credibility=0 -> pure shifted baseline;
+        credibility=1 -> exactly the county's own raw shares so far."""
         shift = self.statewide_shift()
         rshift = self.regional_shift().get(county.region, {cand: 0.0 for cand in CANDIDATES})
         shifted_baseline = {}
@@ -203,22 +216,37 @@ class SouthCarolinaSenateModel:
 
         raw = county.raw_shares
         if raw is None:
-            blended = shifted_baseline
-        else:
-            cred = county.credibility
-            blended = {cand: cred * raw[cand] + (1 - cred) * shifted_baseline[cand]
-                       for cand in CANDIDATES}
-            if county.pct_counted >= 0.30:
-                for cand in CANDIDATES:
-                    lo, hi = raw[cand] - MOMENTUM_MAX_DRIFT, raw[cand] + MOMENTUM_MAX_DRIFT
-                    blended[cand] = min(max(blended[cand], lo), hi)
+            return shifted_baseline
 
+        cred = county.credibility
+        blended = {cand: cred * raw[cand] + (1 - cred) * shifted_baseline[cand]
+                   for cand in CANDIDATES}
         total = sum(blended.values())
         return {cand: 100.0 * blended[cand] / total for cand in CANDIDATES}
 
+    def project_shares(self, county: "County") -> dict:
+        """Deductive final share for the county: counted votes held fixed
+        exactly as reported, plus the projected remainder distributed
+        according to remainder_shares(). At 100% reporting this returns
+        precisely the raw counted shares -- nothing else can move it."""
+        remaining = max(0.0, county.effective_turnout - county.counted_votes)
+        if remaining <= 0 and county.counted_votes > 0:
+            return county.raw_shares
+
+        rem_shares = self.remainder_shares(county)
+        final_votes = {
+            cand: county.votes[cand] + remaining * rem_shares[cand] / 100.0
+            for cand in CANDIDATES
+        }
+        total = sum(final_votes.values())
+        if total <= 0:
+            return rem_shares
+        return {cand: 100.0 * final_votes[cand] / total for cand in CANDIDATES}
+
     def blended_baseline_frame(self) -> pd.DataFrame:
-        """Every county's current blended projection, as a DataFrame indexed
-        by county -- this is what the Monte Carlo sim shocks around."""
+        """Every county's current deductive projection, as a DataFrame
+        indexed by county -- this is what the Monte Carlo sim shocks
+        around.""" 
         rows = []
         for name, c in self.counties.items():
             row = {"county": name, "turnout": c.effective_turnout}
@@ -264,10 +292,20 @@ class SouthCarolinaSenateModel:
     # ---- Monte Carlo: P(runoff) and P(advance) -----------------------------
 
     def run_simulation(self, n_sims=N_SIMS, seed=None) -> dict:
-        frame = self.blended_baseline_frame()
-        counties_list = frame.index.tolist()
-        turnout = frame["turnout"].to_numpy(dtype=float)
-        base_share = frame[CANDIDATES].to_numpy(dtype=float) / 100.0
+        """Shocks only the UNCOUNTED remainder of each county, then adds
+        each county's fixed counted votes back in -- consistent with the
+        deductive projection above. A fully-counted county contributes
+        zero simulation variance (remaining=0), exactly as it should."""
+        counties_list = list(self.counties.keys())
+        n_county = len(counties_list)
+
+        counted_votes = np.array([[self.counties[n].votes[c] for c in CANDIDATES]
+                                   for n in counties_list], dtype=float)
+        remaining = np.array([max(0.0, self.counties[n].effective_turnout -
+                                   self.counties[n].counted_votes)
+                               for n in counties_list], dtype=float)
+        rem_share = np.array([[self.remainder_shares(self.counties[n])[c] / 100.0
+                                for c in CANDIDATES] for n in counties_list], dtype=float)
 
         reported_votes = sum(c.counted_votes for c in self.counties.values())
         reported_fraction = min(1.0, reported_votes / self.total_turnout) if self.total_turnout else 0.0
@@ -275,16 +313,15 @@ class SouthCarolinaSenateModel:
         sigma_state = SIGMA_STATE_0 * shrink
         sigma_county = SIGMA_COUNTY_0 * shrink
 
-        mean_turnout = turnout.mean()
-        county_scale = np.sqrt(mean_turnout / np.maximum(turnout, 1.0))
+        mean_remaining = remaining[remaining > 0].mean() if (remaining > 0).any() else 1.0
+        county_scale = np.sqrt(mean_remaining / np.maximum(remaining, 1.0))
 
         others = [c for c in CANDIDATES if c != REFERENCE]
         ref_idx = CANDIDATES.index(REFERENCE)
-        base_logit = np.log(np.clip(base_share[:, [CANDIDATES.index(c) for c in others]], 1e-6, None) /
-                             np.clip(base_share[:, [ref_idx]], 1e-6, None))
+        base_logit = np.log(np.clip(rem_share[:, [CANDIDATES.index(c) for c in others]], 1e-6, None) /
+                             np.clip(rem_share[:, [ref_idx]], 1e-6, None))
 
         rng = np.random.default_rng(seed)
-        n_county = len(counties_list)
         n_cand = len(others)
 
         statewide_pct = {c: np.zeros(n_sims) for c in CANDIDATES}
@@ -297,13 +334,13 @@ class SouthCarolinaSenateModel:
                 logit = base_logit
             exp_logit = np.exp(logit)
             denom = 1.0 + exp_logit.sum(axis=1)
-            shares = np.zeros((n_county, len(CANDIDATES)))
+            shocked_rem_share = np.zeros((n_county, len(CANDIDATES)))
             for j, cand in enumerate(others):
-                shares[:, CANDIDATES.index(cand)] = exp_logit[:, j] / denom
-            shares[:, ref_idx] = 1.0 / denom
+                shocked_rem_share[:, CANDIDATES.index(cand)] = exp_logit[:, j] / denom
+            shocked_rem_share[:, ref_idx] = 1.0 / denom
 
-            votes = shares * turnout[:, None]
-            total_votes = votes.sum(axis=0)
+            final_votes = counted_votes + remaining[:, None] * shocked_rem_share
+            total_votes = final_votes.sum(axis=0)
             pct = 100.0 * total_votes / total_votes.sum()
             for j, cand in enumerate(CANDIDATES):
                 statewide_pct[cand][s] = pct[j]

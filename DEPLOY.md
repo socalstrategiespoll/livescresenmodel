@@ -227,12 +227,14 @@ runoff line will show real movement in these numbers well before that.
 
 **The county table** shows each county's *raw* reported split against
 baseline — unmodeled, exactly what's been counted — next to the model's
-blended projection.
+projection.
 
 **The two maps** — colored by whichever candidate is *leading* in each
-county. This model isn't deductive, so "Counted so far" and "Model
-projection" aren't "actual" vs. "remainder" — the projection map shows the
-full blended call for every county, present from the first cycle on.
+county. This model is deductive: a county's counted votes are held fixed
+exactly as reported, and "Model projection" only differs from "Counted so
+far" in counties that are still partially in, where it's counted-votes-
+plus-projected-remainder. Once a county hits 100%, the two maps show the
+identical result for it.
 
 **Model state** shows the statewide shift per candidate. A single large
 county reporting won't move any candidate's shift much on its own by design

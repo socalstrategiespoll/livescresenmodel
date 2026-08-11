@@ -37,15 +37,23 @@ after every run, which wipes the credibility/shift state the model
 accumulates over the night, and it has no URL for a site to read. The web
 service solves both by staying alive.
 
-## This model is NOT deductive
+## This model IS deductive
 
-Same architecture as every prior build: every county's full projection is a
-credibility-weighted **blend** of its own observed results and a
-(shift-adjusted) baseline, not counted-votes-held-fixed-plus-projected-
-remainder. A single large county partially reporting is capped
-(`MAX_SINGLE_COUNTY_SHARE`) so it can't read as a "consistent pattern" on
-its own; a genuine multi-county pattern converges the shift toward the real
-swing well before 100% reporting. Full reasoning in
+Unlike every prior build in this family (Michigan, Wisconsin, South Dakota,
+MN Senate, MN Governor -- all of which explicitly blend a county's full
+projection, counted votes included), this one holds each county's counted
+votes **fixed exactly as reported** and only projects the still-uncounted
+remainder. That remainder is a credibility-weighted blend of the county's
+own raw shares so far and a (shift-adjusted) baseline, where credibility
+grows from 0 toward 1 as more of the county reports -- literally "how close
+the still-uncounted votes should be assumed to run to the votes already
+in." At 100% reporting a county's projection is its exact counted result;
+nothing else can move it. A single large county partially reporting is
+capped (`MAX_SINGLE_COUNTY_SHARE`) so it can't dominate the statewide shift
+on its own; a genuine multi-county pattern converges the shift toward the
+real swing well before 100% reporting. The Monte Carlo runoff/advance
+simulation shocks only each county's uncounted remainder too, so a
+fully-counted county contributes zero simulated variance. Full reasoning in
 `south_carolina_senate_model.py`'s module docstring.
 
 ## Files
