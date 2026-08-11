@@ -316,13 +316,15 @@ class SouthCarolinaSenateModel:
         order = np.argsort(-mat, axis=1)
         top2 = order[:, :2]
 
-        advance, win_outright, first_place, median_pct, p05, p95 = {}, {}, {}, {}, {}, {}
+        advance, win_outright, first_place = {}, {}, {}
+        median_pct, p05, p90, p95 = {}, {}, {}, {}
         for i, cand in enumerate(CANDIDATES):
             advance[cand] = float(np.mean(np.any(top2 == i, axis=1)))
             win_outright[cand] = float(np.mean(no_runoff & (order[:, 0] == i)))
             first_place[cand] = float(np.mean(order[:, 0] == i))
-            median_pct[cand] = float(np.median(statewide_pct[cand]))
+            median_pct[cand] = float(np.percentile(statewide_pct[cand], 50))  # == p50
             p05[cand] = float(np.percentile(statewide_pct[cand], 5))
+            p90[cand] = float(np.percentile(statewide_pct[cand], 90))
             p95[cand] = float(np.percentile(statewide_pct[cand], 95))
 
         return {
@@ -331,7 +333,9 @@ class SouthCarolinaSenateModel:
             "win_outright": win_outright,
             "first_place": first_place,
             "median_pct": median_pct,
+            "p50": median_pct,   # alias -- 50th percentile is the median
             "p05": p05,
+            "p90": p90,
             "p95": p95,
             "sigma_state_used": sigma_state,
             "reported_fraction": reported_fraction,
