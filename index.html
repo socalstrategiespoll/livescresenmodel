@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>South Carolina Senate — Republican Primary — Live Model</title>
+<meta name="description" content="Live county-level Bayesian projection of the South Carolina Republican Senate primary: Graham, Norman, Fry, Sanford, Lynch, plus runoff probability." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <div class="race">
+      <span class="eyebrow">South Carolina · U.S. Senate · Republican Primary</span>
+      <span class="firm">SoCal Strategies live model</span>
+    </div>
+    <div class="pulse" id="pulse" data-state="connecting">
+      <span class="dot"></span>
+      <span id="pulse-label">connecting</span>
+      <span class="stamp" id="stamp"></span>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <p class="alert" id="alert" hidden></p>
+
+  <section class="thesis" id="thesis" aria-live="polite">
+    <div class="verdict">
+      <span class="verdict-label">Leading</span>
+      <div class="verdict-line">
+        <span class="verdict-name" id="lead-name">—</span>
+        <span class="verdict-number" id="lead-margin">—</span>
+      </div>
+      <span class="verdict-sub" id="verdict-sub">Waiting for the first results</span>
+    </div>
+
+    <div class="runoff-stat">
+      <span class="stat-label">Runoff probability</span>
+      <span class="runoff-number" id="p-runoff">—</span>
+      <span class="stat-note">SC requires 50%+1 to win outright — anything else on election night, the top two meet again</span>
+    </div>
+  </section>
+
+  <section class="advance">
+    <figcaption class="stat-label">Chance of advancing to the runoff</figcaption>
+    <div id="advance-bars"></div>
+  </section>
+
+  <section class="split split6" id="candidate-stats">
+    <div class="stat" id="stat-graham">
+      <span class="stat-label cand-graham">Graham</span>
+      <span class="stat-value" id="pct-graham">—</span>
+      <span class="stat-note" id="votes-graham">—</span>
+    </div>
+    <div class="stat" id="stat-norman">
+      <span class="stat-label cand-norman">Norman</span>
+      <span class="stat-value" id="pct-norman">—</span>
+      <span class="stat-note" id="votes-norman">—</span>
+    </div>
+    <div class="stat" id="stat-fry">
+      <span class="stat-label cand-fry">Fry</span>
+      <span class="stat-value" id="pct-fry">—</span>
+      <span class="stat-note" id="votes-fry">—</span>
+    </div>
+    <div class="stat" id="stat-sanford">
+      <span class="stat-label cand-sanford">Sanford</span>
+      <span class="stat-value" id="pct-sanford">—</span>
+      <span class="stat-note" id="votes-sanford">—</span>
+    </div>
+    <div class="stat" id="stat-lynch">
+      <span class="stat-label cand-lynch">Lynch</span>
+      <span class="stat-value" id="pct-lynch">—</span>
+      <span class="stat-note" id="votes-lynch">—</span>
+    </div>
+    <div class="stat" id="stat-other">
+      <span class="stat-label cand-other">Other</span>
+      <span class="stat-value" id="pct-other">—</span>
+      <span class="stat-note" id="votes-other">—</span>
+    </div>
+  </section>
+
+  <section class="split">
+    <div class="stat">
+      <span class="stat-label">Vote counted</span>
+      <span class="stat-value" id="counted">—</span>
+      <span class="stat-note"><span id="precincts">—</span> of precincts in</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Projected turnout</span>
+      <span class="stat-value" id="turnout">—</span>
+      <span class="stat-note">across all 46 counties</span>
+    </div>
+  </section>
+
+  <section class="tally">
+    <div class="tally-bar" id="tally-bar"></div>
+    <div class="tally-foot">
+      <span id="note">Model projection (baseline + observed results blended), not raw votes counted so far</span>
+    </div>
+  </section>
+
+  <section class="maps">
+    <div class="map-head">
+      <h2>South Carolina by county</h2>
+    </div>
+
+    <p class="panel-note">
+      Colored by the leading candidate in each county. Hover to inspect.
+    </p>
+
+    <div class="map-grid">
+      <figure class="map-cell">
+        <figcaption class="map-title">Counted so far</figcaption>
+        <p class="map-sub" id="note-counted"></p>
+        <svg id="svg-counted" viewBox="0 0 620 400" role="img"
+             aria-label="South Carolina counties by leading candidate in votes counted so far">
+          <g id="shapes-counted"></g>
+        </svg>
+      </figure>
+
+      <figure class="map-cell">
+        <figcaption class="map-title">Model projection</figcaption>
+        <p class="map-sub" id="note-projected"></p>
+        <svg id="svg-projected" viewBox="0 0 620 400" role="img"
+             aria-label="South Carolina counties by the model's blended leading candidate">
+          <g id="shapes-projected"></g>
+        </svg>
+      </figure>
+    </div>
+
+    <div class="legend" id="legend-candidates"></div>
+
+    <div class="map-detail" id="map-detail" data-county="">
+      <p class="map-hint">Hover a county on either map.</p>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Counties reporting</h2>
+    <p class="panel-note">
+      Sorted by votes counted. Shows the model's blended projection for each
+      county, not just the raw count so far.
+    </p>
+    <div class="table-wrap">
+      <table class="counties">
+        <thead>
+          <tr>
+            <th scope="col">County</th>
+            <th scope="col" class="num">In</th>
+            <th scope="col" class="num">Graham</th>
+            <th scope="col" class="num">Norman</th>
+            <th scope="col" class="num">Fry</th>
+            <th scope="col" class="num">Sanford</th>
+            <th scope="col" class="num">Lynch</th>
+            <th scope="col" class="num">Other</th>
+            <th scope="col">Leader</th>
+          </tr>
+        </thead>
+        <tbody id="county-rows">
+          <tr class="empty"><td colspan="8">No counties reporting yet.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="two-up">
+    <div class="panel">
+      <h2>Regional swing</h2>
+      <p class="panel-note">
+        How far each region's leading candidate is running from baseline, by
+        region (Upstate, Midlands, Pee Dee, Lowcountry).
+      </p>
+      <div class="regions" id="regions"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Model state</h2>
+      <p class="panel-note">
+        Not deductive: every county's projection blends its own results with
+        the baseline at a credibility weight that grows with how much has
+        reported, and shifts further when many counties show the same
+        pattern, not just one. The runoff/advance probabilities above shrink
+        their uncertainty as the state fills in and collapse to a hard
+        outcome once counting finishes.
+      </p>
+      <dl class="diag">
+        <dt>Counties reporting</dt><dd id="d-counties">—</dd>
+        <dt>Statewide shift (Graham)</dt><dd id="d-shift-graham">—</dd>
+        <dt>Statewide shift (Norman)</dt><dd id="d-shift-norman">—</dd>
+        <dt>Statewide shift (Fry)</dt><dd id="d-shift-fry">—</dd>
+        <dt>Statewide shift (Sanford)</dt><dd id="d-shift-sanford">—</dd>
+        <dt>Statewide shift (Lynch)</dt><dd id="d-shift-lynch">—</dd>
+      </dl>
+    </div>
+  </section>
+
+  <footer>
+    <p>
+      Results from <a href="https://civicapi.org">civicAPI</a>. Projections are
+      modeled estimates from a county-level Bayesian simulation, not race calls.
+      Runoff and advance-to-runoff probabilities come from a Monte Carlo
+      simulation whose uncertainty shrinks as more of the state reports.
+      Baseline is built from four coalition-proxy source races, not a direct
+      poll of this primary — see the repo README for methodology and known
+      limitations.
+    </p>
+  </footer>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+# Render blueprint: one web service that polls civicAPI and serves the
+# projection + runoff simulation. Same reasoning as the prior MN/MI/WI/SD
+# builds -- see README.md.
+#
+# Layout is flat: every file sits at the repository root, including the site
+# files, because GitHub's web uploader does not preserve folders.
+
+services:
+  - type: web
+    name: sc-senate-gop-primary-model
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: python server.py
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.3"
+      - key: RACE_ID
+        value: ""  # NOT SET -- no civicAPI race exists for this primary yet.
+                   # Every poll cycle will fail and log a clear error until
+                   # this is filled in with a real numeric race ID (see
+                   # README "Known limitations" and civicapi_feed.py).
+      - key: N_SIMS
+        value: "20000"
+      - key: POLL_INTERVAL
+        value: "60"
+
+      # Optional. Set this to a mounted Render disk path (for example /var/data) if
+      # you want county turnout/reporting state to survive a restart.
+      # - key: STATE_DIR
+      #   value: /var/data
