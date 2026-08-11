@@ -78,11 +78,12 @@ function renderCandidateStats(data) {
   CANDIDATES.forEach((c) => {
     document.getElementById("pct-" + c).textContent = fmtPct(data.projection.pct[c]);
     document.getElementById("votes-" + c).textContent = fmtInt(data.projection.votes[c]) + " votes";
-    const p50 = r.p50 ? r.p50[c] : null;
-    const p90 = r.p90 ? r.p90[c] : null;
+    const mid50 = r.interval_50 ? r.interval_50[c] : null;
+    const mid90 = r.interval_90 ? r.interval_90[c] : null;
     document.getElementById("pctl-" + c).textContent =
-      p50 != null && p90 != null
-        ? "50th " + p50.toFixed(1) + "% · 90th " + p90.toFixed(1) + "%"
+      mid50 && mid90
+        ? "mid 50%: " + mid50[0].toFixed(1) + "\u2013" + mid50[1].toFixed(1) + "%"
+          + "  ·  mid 90%: " + mid90[0].toFixed(1) + "\u2013" + mid90[1].toFixed(1) + "%"
         : "—";
   });
 }
