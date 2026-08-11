@@ -253,6 +253,13 @@ section + section { margin-top: 2.25rem; }
 
 .stat-note { font-size: 0.78rem; color: var(--ink-soft); }
 
+.stat-percentiles {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.7rem;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---------- tally ---------- */
 
 .tally-bar {

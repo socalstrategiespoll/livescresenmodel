@@ -74,9 +74,16 @@ function renderAdvanceBars(data) {
 }
 
 function renderCandidateStats(data) {
+  const r = data.runoff;
   CANDIDATES.forEach((c) => {
     document.getElementById("pct-" + c).textContent = fmtPct(data.projection.pct[c]);
     document.getElementById("votes-" + c).textContent = fmtInt(data.projection.votes[c]) + " votes";
+    const p50 = r.p50 ? r.p50[c] : null;
+    const p90 = r.p90 ? r.p90[c] : null;
+    document.getElementById("pctl-" + c).textContent =
+      p50 != null && p90 != null
+        ? "50th " + p50.toFixed(1) + "% · 90th " + p90.toFixed(1) + "%"
+        : "—";
   });
 }
 
