@@ -27,12 +27,22 @@ except ImportError:
     requests = None
 
 API_BASE = "https://civicapi.org/api/v2"
-SC_SENATE_GOP_PRIMARY = None  # TODO -- set once civicAPI has assigned this
-                               # race an ID. Unlike the MN Governor build,
-                               # no results page has been located for this
-                               # race yet either, so there is nothing to
-                               # verify against -- confirm via civicapi.org
-                               # search once the primary is scheduled.
+SC_SENATE_GOP_PRIMARY = 86330  # 2026 South Carolina US Senate Special --
+                                # civicapi.org/results/elections/86330. The
+                                # results page is a client-rendered SPA
+                                # (no JSON in the initial HTML), so this ID
+                                # is confirmed to EXIST but NOT verified
+                                # against the actual /api/v2/race/86330
+                                # payload -- and its title says "Special",
+                                # not "Primary". South Carolina special
+                                # elections run their own primary phase, so
+                                # this is very likely the right race, but
+                                # confirm on first deploy that the payload's
+                                # candidate list is the five-way GOP primary
+                                # field (Graham/Norman/Fry/Sanford/Lynch) and
+                                # not the special election overall or a
+                                # different phase of it. Watch the first
+                                # Render deploy's logs (DEPLOY.md Part 2.3).
 
 # Substring match keys -- VERIFY against the actual payload once reachable.
 GRAHAM_KEYS = ("graham",)

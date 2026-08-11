@@ -11,11 +11,14 @@ three browser tabs: GitHub, Render, Cloudflare.
 Everything is flat. No folders anywhere, because GitHub's web uploader does not
 preserve them.
 
-**Before you start:** there is no civicAPI race ID for this primary yet --
-see README.md "Known limitations". You can deploy everything below now; the
-service will start and serve the pre-election baseline (P(runoff) and
-advance probabilities included) at `/api/projection`, but every poll cycle
-will log `!! RACE_ID is not set` until you fill one in.
+**Before you start:** the civicAPI race ID (86330) is set but unverified
+against the actual API payload (only the human-facing results page was
+reachable, not the raw JSON endpoint) -- see README.md "Known limitations".
+Its title says "2026 South Carolina US Senate Special" rather than
+"Primary" -- almost certainly the right race, since SC special elections
+run their own primary phase, but confirm on first deploy. You can deploy
+everything below now; watch the first deploy's logs closely (Part 2.3) to
+confirm the candidate matching actually works.
 
 ---
 
@@ -66,36 +69,30 @@ Your repo should contain exactly those 13 files at the root, no folders.
 
 **If Render can't find `render.yaml`**, it's not at the repo root — recheck Part 1.
 
-### 2.2 Nothing to configure yet
+### 2.2 Nothing to configure
 
-No secrets needed. `RACE_ID` is intentionally blank in `render.yaml` — see
-"Before you start" above. Fill it in under the service's **Environment**
-tab the moment civicAPI opens this race (Render redeploys automatically).
+No secrets needed. `RACE_ID` is already set to `86330` in `render.yaml`.
 
-### 2.3 Watch the first build
+### 2.3 Watch the first build closely
 
-Open the service, then the **Logs** tab. First build takes 2-4 minutes. You'll see:
+Open the service, then the **Logs** tab. First build takes 2-4 minutes. Once
+it finishes you want to see, in this order:
 
 ```
-poller started: race None every 60s, 20000 sims
-!! RACE_ID is not set -- every cycle will fail until it is. See civicapi_feed.py / render.yaml.
+poller started: race 86330 every 60s, 20000 sims
 serving on :10000
-[HH:MM:SS] cycle failed, serving last good projection: SC_SENATE_GOP_PRIMARY / RACE_ID is not set -- ...
-```
-
-That's expected until a race ID exists. `/api/projection` will still 503
-until the first successful cycle — this is different from every prior
-build in this family, which at least had a placeholder ID to start from.
-
-**Once you set `RACE_ID`** (see 2.2), the next deploy should show:
-
-```
    matched: <Graham's exact name> / <Norman's exact name> / <Fry's exact name> / <Sanford's exact name> / <Lynch's exact name>
 [HH:MM:SS] 0.0% counted | 0 cty | G 31.0 N 24.0 F 19.0 S 14.0 L 8.0 O 4.0 | leader graham +7.0 | P(runoff) 100.0%
 ```
 
 repeating once a minute. Before polls close, `0.0% counted | 0 cty` is
-correct — that's the pre-election baseline.
+correct -- that's the pre-election baseline. **This race's ID was only
+confirmed against civicAPI's human-facing results page, not the raw API
+payload, and its title says "Special" rather than "Primary"** -- if
+`matched:` doesn't appear, or a fetch error shows up instead of a
+`[HH:MM:SS]` line, that's the first thing to debug (wrong ID, wrong phase
+of the special election, or the primary hasn't opened in civicAPI's system
+yet even though the results page exists).
 
 ### 2.4 Read the log carefully. This is your only pre-flight.
 
@@ -135,7 +132,7 @@ Open in your browser:
 
 | URL | Should show |
 |---|---|
-| `<your-url>/health` | `{"ok": true, "cycles": N, "race_id_set": true/false, ...}` |
+| `<your-url>/health` | `{"ok": true, "cycles": N, "race_id_set": true, ...}` with cycles counting up |
 | `<your-url>/api/projection` | a large JSON blob with `projection`, `runoff`, `counties`, `diagnostics` (503 until the first successful cycle) |
 | `<your-url>/api/history` | a list of past cycles |
 
@@ -188,14 +185,14 @@ Cloudflare gives you a URL like `https://sc-senate-gop-primary.pages.dev`.
 **What you should see:** status pill top-right, headline shows Graham
 leading (pre-election baseline), a runoff-probability stat near 100%,
 advance-to-runoff bars for all six, county table says "No counties
-reporting yet." If `RACE_ID` isn't set yet, the page will show a
-reconnecting/error state instead — that's expected, see Part 2.
+reporting yet."
 
 **If the pill says "reconnecting":** open the browser console (F12).
 - **CORS error** → `API_BASE` in `app.js` is wrong. Recheck 3.1
 - **404 / connection refused** → Render service is down, check its logs
-- **503 "no projection yet"** → either `RACE_ID` isn't set, or the first
-  poll cycle hasn't finished
+- **503 "no projection yet"** → the first poll cycle hasn't finished, or
+  the race isn't open in civicAPI's system yet even though the results
+  page exists
 
 ### 3.5 Optional: custom domain
 
@@ -205,12 +202,8 @@ Pages project → **Custom domains** → **Set up a custom domain**.
 
 ## Part 4 — Before polls close
 
-**Set `RACE_ID`.** This is the one step every other build in this family
-didn't need to do fresh at this stage — do it as soon as civicAPI has the
-race, then confirm the candidate-matching log line (2.3/2.4).
-
 **Service still awake.** Open `<render-url>/health`, `cycles` should be roughly one
-per minute since `RACE_ID` was set, and `race_id_set` should read `true`.
+per minute since start, and `race_id_set` should read `true`.
 
 **Site updates on its own.** Leave it open a minute — timestamp should tick forward
 without reloading.
@@ -281,10 +274,9 @@ the fix.
 |---|---|---|
 | Render can't find `render.yaml` | not at repo root | redo Part 1 |
 | No `serving on` line, service restarts | server didn't bind | check logs for a traceback above it |
-| `!! RACE_ID is not set` repeating | no civicAPI race yet | expected until the race is scheduled -- set `RACE_ID` when it exists |
 | `!! CANDIDATE MATCH FAILED` | feed spells names differently | edit the `*_KEYS` tuples on GitHub |
 | `!! UNMATCHED COUNTIES` | county name variant | edit `normalize_county()` on GitHub |
-| `/api/projection` says no projection yet (503) | `RACE_ID` unset, or first cycle not done | set `RACE_ID`, or wait 60 seconds |
+| `/api/projection` says no projection yet (503) | first cycle not done | wait 60 seconds |
 | Site pill stuck on "reconnecting" | wrong `API_BASE`, or Render down | check browser console for CORS vs 404 |
 | Site shows nothing but the header | Pages output directory wrong | should be `/`, not `web` |
 
@@ -294,8 +286,7 @@ the fix.
 
 | When | Do |
 |---|---|
-| Now | Parts 1-3 (race ID not yet available -- site will run on baseline only) |
-| Once civicAPI opens the race | Set `RACE_ID` (Part 4), confirm candidate matching |
-| Any time before polls open | Rest of Part 4 |
+| Now | Parts 1-3 (race ID already set, but unverified -- watch Part 2.3/2.4's logs closely) |
+| Any time before polls open | Part 4 |
 | Polls close | Results start |
 | Through the night | Part 5 |

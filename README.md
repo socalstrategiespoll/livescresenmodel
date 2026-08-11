@@ -81,15 +81,17 @@ CORS is open, so the site can be hosted anywhere.
 
 ## Known limitations
 
-- **No civicAPI race ID at all.** Unlike prior builds in this family (which
-  at least had a results-page ID to plug in unverified), no race has been
-  located for this primary yet -- there may not be a date set. `RACE_ID` in
-  `civicapi_feed.py` and `render.yaml` is a `None`/empty placeholder;
-  `fetch_race` raises a clear error rather than attempting a request that
-  can't work. Set this the moment civicAPI opens the race, then watch the
-  first Render deploy's logs to confirm `GRAHAM_KEYS`/`NORMAN_KEYS`/
-  `FRY_KEYS`/`SANFORD_KEYS`/`LYNCH_KEYS` actually match the payload's
-  candidate names.
+- **civicAPI race ID is set (86330)** but **NOT verified against the raw
+  API payload** -- confirmed only via the human-facing results page at
+  `civicapi.org/results/elections/86330` ("2026 South Carolina US Senate
+  Special"), which renders client-side and doesn't expose the JSON.
+  `/api/v2/race/86330` itself hasn't been checked, and the title says
+  "Special" rather than "Primary" -- South Carolina special elections run
+  their own primary phase, so this is very likely the right race, but
+  confirm the candidate list on first deploy before trusting it live (see
+  DEPLOY.md Part 2.3/2.4). `GRAHAM_KEYS`/`NORMAN_KEYS`/`FRY_KEYS`/
+  `SANFORD_KEYS`/`LYNCH_KEYS` in `civicapi_feed.py` are still guesses at
+  substring matches.
 - **`percent_reporting` counts precincts, not votes**, same caution as every
   prior build in this family.
 - **The baseline is a coalition-proxy construction, not a direct poll of

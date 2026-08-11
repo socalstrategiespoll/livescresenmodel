@@ -17,10 +17,15 @@ services:
       - key: PYTHON_VERSION
         value: "3.12.3"
       - key: RACE_ID
-        value: ""  # NOT SET -- no civicAPI race exists for this primary yet.
-                   # Every poll cycle will fail and log a clear error until
-                   # this is filled in with a real numeric race ID (see
-                   # README "Known limitations" and civicapi_feed.py).
+        value: "86330"  # 2026 South Carolina US Senate Special --
+                        # civicapi.org/results/elections/86330. Confirmed
+                        # to EXIST but NOT verified against the raw
+                        # /api/v2/race/86330 payload (results page is a
+                        # client-rendered SPA); the title says "Special"
+                        # not "Primary" -- almost certainly right, since SC
+                        # specials run their own primary phase, but watch
+                        # the first deploy's logs closely (DEPLOY.md 2.3)
+                        # to confirm the candidate match before trusting it.
       - key: N_SIMS
         value: "20000"
       - key: POLL_INTERVAL
