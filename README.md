@@ -100,8 +100,14 @@ CORS is open, so the site can be hosted anywhere.
   DEPLOY.md Part 2.3/2.4). `GRAHAM_KEYS`/`NORMAN_KEYS`/`FRY_KEYS`/
   `SANFORD_KEYS`/`LYNCH_KEYS` in `civicapi_feed.py` are still guesses at
   substring matches.
-- **`percent_reporting` counts precincts, not votes**, same caution as every
-  prior build in this family.
+- **`percent_reporting` counts precincts, not votes** -- which is exactly
+  why it's used for turnout recalibration rather than treated as vote
+  progress: `County.recalibrate_turnout()` divides counted votes by
+  `percent_reporting` to get a feed-implied total turnout for that county,
+  clamped to 0.40x-2.50x the baseline and ramped in by
+  `TURNOUT_FULL_TRUST_PCT` so a tiny early batch can't imply something
+  wild. This only runs when `percent_reporting` is a real nonzero value --
+  with none supplied, effective turnout is left exactly where it was.
 - **The baseline is a coalition-proxy construction, not a direct poll of
   this primary.** It's built from four different source races (an actual
   Graham-vs-Lynch Senate primary, Norman's own gubernatorial primary

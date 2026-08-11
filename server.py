@@ -151,6 +151,7 @@ def build_county_table(model: SouthCarolinaSenateModel) -> list:
             "first_batch": c.is_first_batch,
             "pct_precincts": round(c.pct_reporting * 100, 1) if c.pct_reporting else None,
             "pct_of_projected": round(100 * c.pct_counted, 1),
+            "baseline_turnout": int(c.baseline_turnout),
             "projected_total": int(c.effective_turnout),
             "remaining": int(round(remaining)),
             "projected_final": {cand: round(projected_shares[cand], 1) for cand in CANDIDATES},

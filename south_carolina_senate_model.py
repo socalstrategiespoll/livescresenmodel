@@ -48,6 +48,21 @@ below for why this build differs from the rest of the family here)
    every county (reporting or not) before blending. A genuine multi-county
    pattern moves the shift well before 100% is in; one outlier county
    mostly doesn't.
+4. TURNOUT RECALIBRATION -- civicAPI's percent_reporting counts PRECINCTS,
+   not votes, so counted_votes / pct_reporting gives a feed-implied total
+   turnout for that county that can be compared against the baseline
+   projection. This ONLY happens when pct_reporting is a real nonzero
+   value (County.recalibrate_turnout, called from update_county) -- with
+   no percent_reporting, effective_turnout is left exactly where it was;
+   there's nothing to divide by and no signal to act on. When it IS
+   nonzero, the implied turnout is clamped to TURNOUT_CLAMP (0.40x-2.50x
+   the baseline) and ramped in by TURNOUT_FULL_TRUST_PCT so one precinct's
+   worth of an early batch can't imply a wild county total. This feeds
+   directly into the deductive remainder calculation above --
+   remaining_votes = effective_turnout - counted_votes -- so a county
+   whose real turnout is running above or below its baseline projection
+   gets a correspondingly larger or smaller remainder to project, not just
+   a corrected total.
 
 UNCERTAINTY SHRINKAGE (new for this build). SIGMA_STATE and SIGMA_COUNTY
 (the Monte Carlo shock SDs -- see simulate_sc_senate.py for the original
@@ -97,13 +112,25 @@ SIGMA_COUNTY_0 = 0.35              # pre-election county idiosyncratic shock SD
 RUNOFF_THRESHOLD = 50.0
 N_SIMS = 20_000
 
+TURNOUT_CLAMP = (0.40, 2.50)       # feed-implied turnout can't move a county's
+                                    # effective turnout outside 0.40x-2.50x
+                                    # its baseline projection, no matter what
+                                    # the feed says -- guards against a
+                                    # garbage/partial percent_reporting value
+TURNOUT_FULL_TRUST_PCT = 0.25      # precincts-reporting fraction at which the
+                                    # feed-implied turnout is fully trusted;
+                                    # below that it's blended toward the
+                                    # baseline turnout, since counted/pct_in
+                                    # is noisy on a tiny initial batch
+
 
 class County:
     def __init__(self, name, region, baseline_shares, turnout):
         self.name = name
         self.region = region
         self.baseline_shares = dict(baseline_shares)   # pct, sums to 100
-        self.effective_turnout = turnout
+        self.baseline_turnout = turnout                 # fixed, from the CSV -- never changes
+        self.effective_turnout = turnout                # recalibrated live, see update_county
         self.votes = {c: 0 for c in CANDIDATES}
         self.counted_votes = 0
         self.pct_reporting = 0.0
@@ -129,6 +156,24 @@ class County:
     def evidence_weight(self):
         return self.counted_votes
 
+    def recalibrate_turnout(self):
+        """Feed-implied turnout = counted_votes / pct_reporting, used ONLY
+        when pct_reporting is a real nonzero value -- civicAPI's
+        percent_reporting counts precincts, not votes, so a tiny early
+        batch (e.g. one precinct in) can imply a wild total; that's why
+        this is clamped to TURNOUT_CLAMP and ramped in by
+        TURNOUT_FULL_TRUST_PCT rather than trusted outright. If
+        pct_reporting is 0/None, effective_turnout is left exactly as it
+        was (the baseline, or whatever was last calibrated) -- there is
+        nothing to divide by and no reason to move it."""
+        if not self.pct_reporting or self.pct_reporting <= 0:
+            return
+        implied = self.counted_votes / self.pct_reporting
+        lo, hi = TURNOUT_CLAMP[0] * self.baseline_turnout, TURNOUT_CLAMP[1] * self.baseline_turnout
+        clamped = min(max(implied, lo), hi)
+        trust = min(1.0, self.pct_reporting / TURNOUT_FULL_TRUST_PCT)
+        self.effective_turnout = trust * clamped + (1 - trust) * self.baseline_turnout
+
 
 class SouthCarolinaSenateModel:
     def __init__(self, baseline_path="sc_senate_gop_primary_baseline.csv"):
@@ -138,7 +183,13 @@ class SouthCarolinaSenateModel:
             shares = {c: float(row[c]) for c in CANDIDATES}
             self.counties[name] = County(name, COUNTY_REGION.get(name, "Unknown"),
                                           shares, float(row["turnout"]))
-        self.total_turnout = sum(c.effective_turnout for c in self.counties.values())
+
+    @property
+    def total_turnout(self) -> float:
+        """Live sum of every county's current effective_turnout -- recomputed
+        each call rather than fixed at init, since recalibrate_turnout()
+        can move individual counties' turnout as results come in."""
+        return sum(c.effective_turnout for c in self.counties.values())
 
     def update_county(self, name, votes: dict, pct_reporting=None):
         if name not in self.counties:
@@ -149,6 +200,7 @@ class SouthCarolinaSenateModel:
         c.counted_votes = sum(c.votes.values())
         if pct_reporting is not None:
             c.pct_reporting = pct_reporting
+        c.recalibrate_turnout()
         if was_zero and c.counted_votes > 0:
             c.is_first_batch = True
         elif c.counted_votes > 0:
