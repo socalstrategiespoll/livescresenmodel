@@ -156,22 +156,31 @@ class County:
     def evidence_weight(self):
         return self.counted_votes
 
-    def recalibrate_turnout(self):
-        """Feed-implied turnout = counted_votes / pct_reporting, used ONLY
-        when pct_reporting is a real nonzero value -- civicAPI's
+    def recalibrate_turnout(self, total_votes=None, pct_reporting=None):
+        """Feed-implied turnout = total_votes / pct_reporting, used ONLY
+        when pct_reporting is a real nonzero value -- a live feed's
         percent_reporting counts precincts, not votes, so a tiny early
         batch (e.g. one precinct in) can imply a wild total; that's why
         this is clamped to TURNOUT_CLAMP and ramped in by
         TURNOUT_FULL_TRUST_PCT rather than trusted outright. If
         pct_reporting is 0/None, effective_turnout is left exactly as it
         was (the baseline, or whatever was last calibrated) -- there is
-        nothing to divide by and no reason to move it."""
-        if not self.pct_reporting or self.pct_reporting <= 0:
+        nothing to divide by and no reason to move it.
+
+        total_votes/pct_reporting default to this county's own
+        counted_votes/pct_reporting (the normal live-feed path via
+        update_county), but can be passed explicitly -- see
+        SouthCarolinaSenateModel.update_turnout_estimate, which recalibrates
+        turnout ONLY, from a manually-supplied total, without asserting
+        anything about the per-candidate split of those votes."""
+        total_votes = self.counted_votes if total_votes is None else total_votes
+        pct_reporting = self.pct_reporting if pct_reporting is None else pct_reporting
+        if not pct_reporting or pct_reporting <= 0:
             return
-        implied = self.counted_votes / self.pct_reporting
+        implied = total_votes / pct_reporting
         lo, hi = TURNOUT_CLAMP[0] * self.baseline_turnout, TURNOUT_CLAMP[1] * self.baseline_turnout
         clamped = min(max(implied, lo), hi)
-        trust = min(1.0, self.pct_reporting / TURNOUT_FULL_TRUST_PCT)
+        trust = min(1.0, pct_reporting / TURNOUT_FULL_TRUST_PCT)
         self.effective_turnout = trust * clamped + (1 - trust) * self.baseline_turnout
 
 
@@ -206,7 +215,23 @@ class SouthCarolinaSenateModel:
         elif c.counted_votes > 0:
             c.is_first_batch = False
 
+    def update_turnout_estimate(self, name, total_votes, pct_reporting):
+        """Recalibrate ONE county's effective_turnout from a manually
+        supplied total-votes-so-far figure, WITHOUT touching that county's
+        per-candidate votes/credibility at all. Use this when a total +
+        percent-in is trusted (e.g. hand-verified county results) but a
+        six-way candidate breakdown isn't available or isn't trusted --
+        unlike update_county, this never marks the county as reporting for
+        share-blending purposes; it only sharpens how much of that
+        county's vote pool is left to project."""
+        if name not in self.counties:
+            return
+        c = self.counties[name]
+        c.pct_reporting = pct_reporting
+        c.recalibrate_turnout(total_votes=total_votes, pct_reporting=pct_reporting)
+
     # ---- statewide shift -------------------------------------------------
+
 
     def statewide_shift(self) -> dict:
         """Evidence-weighted deviation of observed vs. baseline shares,

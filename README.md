@@ -64,6 +64,7 @@ fully-counted county contributes zero simulated variance. Full reasoning in
 | `civicapi_feed.py` | API client, payload parsing, county name matching (six-way) |
 | `south_carolina_senate_model.py` | baseline loading, credibility blending, shift shrinkage, regional shift, Monte Carlo runoff/advance simulation |
 | `build_sc_senate_baseline.py` | builds `sc_senate_gop_primary_baseline.csv` from four coalition-proxy source races |
+| `update_turnout_from_actuals.py` | recalibrates that CSV's turnout column from a manually-verified reporting-county snapshot -- rerun with a fresher snapshot as the night progresses |
 | `sc_senate_gop_primary_baseline.csv` | the 46-county baseline the model loads at startup |
 | `sc-counties.geojson` | county shapes for the map -- built from the npm us-atlas counties-10m TopoJSON filtered to FIPS 45 (South Carolina) |
 | `index.html` / `app.js` / `style.css` | the static site |
@@ -135,6 +136,30 @@ CORS is open, so the site can be hosted anywhere.
   Wilson/Evette runoff turnout table's own total, used only for its
   relative county shape -- rescale if there's a different expectation for
   Senate primary turnout specifically.
+- **Turnout is currently calibrated from a manual snapshot, not civicAPI.**
+  civicAPI's own reporting numbers for this race were unreliable, so
+  `update_turnout_from_actuals.py` recalibrates the baseline's `turnout`
+  column from a hand-verified county-by-county votes-so-far snapshot
+  Wilson supplied, rather than from the live feed. For the 37 counties in
+  that snapshot, turnout is `votes / pct_in` directly; for the 9 that
+  hadn't reported yet, it's the old baseline turnout scaled by the
+  size-weighted median correction ratio observed in the other 37 (+4.82%
+  as of the last run) -- see that script's docstring for the full method.
+  Candidate share columns are untouched by this, only turnout. This moved
+  the statewide topline slightly off the clean 31/24/19/14/8/4 calibration
+  target (now ~30.9/24.0/19.3/14.0/7.9/4.0) since the turnout-weighted
+  aggregate now reflects real relative turnout (higher in Fry's Horry,
+  lower in Norman-leaning Spartanburg) rather than the original proxy
+  weights -- expected, not a bug.
+  **Open question for Wilson:** `south_carolina_senate_model.py`'s live
+  `update_county()` still recalculates a county's turnout from civicAPI's
+  own `percent_reporting` every time civicAPI reports data for it, which
+  would overwrite this correction the moment the feed resumes for that
+  county. If civicAPI is being distrusted broadly rather than just for
+  this snapshot, that live recalculation path needs addressing too (e.g.
+  routing real-time updates through the new `update_turnout_estimate()`
+  method instead, which only touches turnout, or disabling `RACE_ID`
+  polling until the feed is trusted again) -- flagged rather than assumed.
 - **State is in memory.** A restart costs the credibility/shift calibration
   until counties report again. Set `STATE_DIR` to a mounted disk to avoid
   that.

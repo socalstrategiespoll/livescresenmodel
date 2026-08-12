@@ -35,6 +35,7 @@ confirm the candidate matching actually works.
    civicapi_feed.py
    south_carolina_senate_model.py
    build_sc_senate_baseline.py
+   update_turnout_from_actuals.py
    sc_senate_gop_primary_baseline.csv
    sc-counties.geojson
    index.html
@@ -48,7 +49,7 @@ confirm the candidate matching actually works.
 
 ### Check
 
-Your repo should contain exactly those 13 files at the root, no folders.
+Your repo should contain exactly those 14 files at the root, no folders.
 
 ---
 
