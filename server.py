@@ -89,6 +89,9 @@ def build_output(model: SouthCarolinaSenateModel, proj: dict, sim: dict,
         "counted": {
             "votes": parsed.get("state_votes"),
             "pct_of_projected_turnout": round(100 * proj["pct_counted"], 2),
+            "pct_of_projected_turnout_raw": round(100 * proj["pct_counted_raw"], 2),
+            "turnout_overshoot": proj["turnout_overshoot"],
+            "reported_votes": proj["reported_votes"],
             "pct_precincts_reporting": parsed.get("percent_precincts_statewide"),
         },
         "turnout": {
@@ -279,6 +282,17 @@ def poller() -> None:
                 print("!! UNMATCHED COUNTIES: {} -- fix normalize_county() in "
                       "civicapi_feed.py".format(
                           output["diagnostics"]["unmatched_counties"]), flush=True)
+            if output["counted"]["turnout_overshoot"]:
+                print("!! TURNOUT OVERSHOOT: civicAPI reports {:,} votes counted, {:.0f}% of "
+                      "projected turnout ({:,}) -- election_name='{}', candidate_names={}. "
+                      "This almost always means RACE_ID is matching the wrong race/phase, not "
+                      "that turnout is genuinely underestimated by this much. Verify against "
+                      "the results page before trusting anything else in this cycle.".format(
+                          output["counted"]["reported_votes"],
+                          output["counted"]["pct_of_projected_turnout_raw"],
+                          output["turnout"]["projected"],
+                          output.get("election_name"),
+                          output["diagnostics"].get("candidate_names")), flush=True)
 
             p = output["projection"]
             r = output["runoff"]

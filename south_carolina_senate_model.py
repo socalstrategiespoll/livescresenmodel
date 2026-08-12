@@ -347,7 +347,9 @@ class SouthCarolinaSenateModel:
         leader, runner_up = ranked[0], ranked[1]
 
         reported_votes = sum(c.counted_votes for c in self.counties.values())
-        pct_counted = min(1.0, reported_votes / self.total_turnout) if self.total_turnout else 0.0
+        pct_counted_raw = reported_votes / self.total_turnout if self.total_turnout else 0.0
+        pct_counted = min(1.0, pct_counted_raw)
+        turnout_overshoot = pct_counted_raw > 1.02   # >102% of projected turnout already counted
         n_reported = sum(1 for c in self.counties.values() if c.counted_votes > 0)
 
         return {
@@ -358,6 +360,9 @@ class SouthCarolinaSenateModel:
             "lead_margin": pct[leader] - pct[runner_up],
             "runoff_needed_point_estimate": bool(pct[leader] < RUNOFF_THRESHOLD),
             "projected_turnout": float(total_votes),
+            "reported_votes": int(reported_votes),
+            "pct_counted_raw": pct_counted_raw,
+            "turnout_overshoot": turnout_overshoot,
             "pct_counted": pct_counted,
             "n_reported": n_reported,
             "statewide_shift": {c: float(v) for c, v in self.statewide_shift().items()},

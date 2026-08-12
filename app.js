@@ -294,7 +294,17 @@ async function refresh() {
     renderDiagnostics(data);
     await renderMaps(data);
     setPulse("live", data.updated_at);
-    document.getElementById("alert").hidden = true;
+    const alertEl = document.getElementById("alert");
+    if (data.counted.turnout_overshoot) {
+      alertEl.hidden = false;
+      alertEl.textContent =
+        "civicAPI reports " + fmtInt(data.counted.reported_votes) + " votes counted \u2014 " +
+        data.counted.pct_of_projected_turnout_raw.toFixed(0) + "% of projected turnout. " +
+        "This almost always means the race ID is matching the wrong race, not that turnout " +
+        "was underestimated by this much. Treat every number on this page as unverified until checked.";
+    } else {
+      alertEl.hidden = true;
+    }
   } catch (err) {
     setPulse("stale");
     const alertEl = document.getElementById("alert");
