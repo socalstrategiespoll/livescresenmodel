@@ -322,7 +322,7 @@ class SouthCarolinaSenateModel:
         leader, runner_up = ranked[0], ranked[1]
 
         reported_votes = sum(c.counted_votes for c in self.counties.values())
-        pct_counted = reported_votes / self.total_turnout if self.total_turnout else 0.0
+        pct_counted = min(1.0, reported_votes / self.total_turnout) if self.total_turnout else 0.0
         n_reported = sum(1 for c in self.counties.values() if c.counted_votes > 0)
 
         return {

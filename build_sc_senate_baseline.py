@@ -1767,10 +1767,10 @@ not precinct-exact. THESE MULTIPLIERS ARE GUESSES -- rerun with Wilson's
 actual preferred magnitudes before this baseline is used live.
 
 TURNOUT WEIGHTS come from the Wilson/Evette runoff turnout table Wilson
-supplied (318,796 statewide) -- used only as RELATIVE county weights here
-(shape, not scale). No target statewide turnout was given for this Senate
-primary; TARGET_TURNOUT below defaults to that table's own total. Rescale
-if Wilson has a different turnout expectation for this race.
+supplied (318,796 statewide) -- used only as RELATIVE county weights
+(shape, not scale). TARGET_TURNOUT is set to Wilson's actual statewide
+turnout expectation for this race, 336,388, rescaling that table's shape
+up to it.
 """
 
 import pandas as pd
@@ -1780,7 +1780,12 @@ TARGET = {"graham": 31.0, "norman": 24.0, "fry": 19.0, "sanford": 14.0,
 CANDIDATES = list(TARGET.keys())
 assert abs(sum(TARGET.values()) - 100.0) < 1e-9
 
-TARGET_TURNOUT = sum(TURNOUT.values())  # placeholder -- see docstring
+TARGET_TURNOUT = 336_388   # Wilson-supplied statewide turnout target,
+                            # replacing the earlier placeholder (the
+                            # Wilson/Evette runoff table's own total,
+                            # 318,796) -- county shape still comes entirely
+                            # from that table's relative weights, just
+                            # rescaled to this total.
 
 SC01 = {"Beaufort", "Berkeley", "Charleston", "Colleton", "Dorchester", "Jasper"}
 COLUMBIA_METRO = {"Richland", "Lexington"}
