@@ -23,6 +23,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from south_carolina_senate_model import SouthCarolinaSenateModel, REGIONS, CANDIDATES
 from civicapi_feed import fetch_race, parse_payload, SC_SENATE_GOP_PRIMARY
+import aiken_sos_feed
 
 
 PORT = int(os.environ.get("PORT", 10000))
@@ -33,6 +34,7 @@ POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", 60))
 HISTORY_LIMIT = int(os.environ.get("HISTORY_LIMIT", 2000))
 STATE_DIR = os.environ.get("STATE_DIR", "")
 BASELINE_PATH = os.environ.get("BASELINE_PATH", "sc_senate_gop_primary_baseline.csv")
+AIKEN_SOS_ENABLED = os.environ.get("AIKEN_SOS_ENABLED", "true").lower() not in ("0", "false", "")
 
 
 class ModelState:
@@ -193,6 +195,48 @@ def load_state(model: SouthCarolinaSenateModel) -> None:
         pass
 
 
+def apply_aiken_sos_override(model: SouthCarolinaSenateModel, parsed: dict) -> None:
+    """Overrides Aiken County's vote totals with South Carolina's own SOS
+    Election Night Reporting feed (aiken_sos_feed.py), since civicAPI is
+    known to glitch specifically for Aiken. Every other county is
+    untouched -- this only ever calls update_county("Aiken", ...).
+
+    civicAPI's percent_reporting for Aiken (if it supplied one this cycle)
+    is kept for turnout-recalibration purposes, since the SOS feed's raw
+    detail.xml doesn't expose a percent-reporting figure of its own --
+    only the vote SPLIT is replaced, not the reporting-progress estimate.
+    Any fetch failure here is caught and logged; the model just keeps
+    whatever Aiken data it already had (from civicAPI or a prior cycle)
+    rather than blocking the whole cycle over one county's feed."""
+    try:
+        result = aiken_sos_feed.fetch_aiken()
+    except Exception as exc:
+        print("   !! Aiken SOS feed failed this cycle, keeping prior Aiken data: {}".format(exc),
+              flush=True)
+        return
+
+    civicapi_aiken_pct = None
+    if "Aiken" in parsed.get("counties", {}):
+        civicapi_aiken_pct = parsed["counties"]["Aiken"].get("percent_precincts")
+    pct_to_use = civicapi_aiken_pct if civicapi_aiken_pct is not None else model.counties["Aiken"].pct_reporting
+
+    civicapi_aiken_total = sum(parsed["counties"].get("Aiken", {}).get("votes", {}).values())
+    sos_total = sum(result["votes"].values())
+    if civicapi_aiken_total and abs(sos_total - civicapi_aiken_total) / civicapi_aiken_total > 0.05:
+        print("   !! Aiken SOS feed ({:,} votes) disagrees with civicAPI ({:,} votes) by "
+              "more than 5% -- using SOS anyway (that's the point of this override), "
+              "but this is worth a manual look".format(sos_total, civicapi_aiken_total), flush=True)
+
+    model.update_county("Aiken", result["votes"], pct_to_use)
+    missing = [k for k in ("graham", "norman", "fry", "sanford", "lynch") if not result["matched_names"].get(k)]
+    if missing:
+        print("   !! Aiken SOS CANDIDATE MATCH FAILED for {} -- fix the matching "
+              "KEYS in aiken_sos_feed.py".format(missing), flush=True)
+    else:
+        print("   Aiken SOS override applied: {:,} votes ({})".format(
+            sos_total, ", ".join(f"{k}={v}" for k, v in result["votes"].items())), flush=True)
+
+
 def poller() -> None:
     model = SouthCarolinaSenateModel(BASELINE_PATH)
     load_state(model)
@@ -212,6 +256,9 @@ def poller() -> None:
 
             for county, record in parsed["counties"].items():
                 model.update_county(county, record["votes"], record.get("percent_precincts"))
+
+            if AIKEN_SOS_ENABLED:
+                apply_aiken_sos_override(model, parsed)
 
             proj = model.project()
             sim = model.run_simulation(n_sims=N_SIMS)

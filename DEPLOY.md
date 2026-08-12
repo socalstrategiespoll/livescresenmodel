@@ -33,6 +33,7 @@ confirm the candidate matching actually works.
    DEPLOY.md
    server.py
    civicapi_feed.py
+   aiken_sos_feed.py
    south_carolina_senate_model.py
    build_sc_senate_baseline.py
    update_turnout_from_actuals.py
@@ -49,7 +50,7 @@ confirm the candidate matching actually works.
 
 ### Check
 
-Your repo should contain exactly those 14 files at the root, no folders.
+Your repo should contain exactly those 15 files at the root, no folders.
 
 ---
 
@@ -101,6 +102,16 @@ yet even though the results page exists).
 
 **`matched: <name> / <name> / <name> / <name> / <name>`** — the model found
 all five named candidates in the civicAPI payload.
+
+**`Aiken SOS override applied: N votes (...)`** — the SOS feed worked; Aiken
+is now coming from `enr-scvotes.org`, not civicAPI. If you instead see
+**`Aiken SOS feed failed this cycle`**, the endpoint guesses in
+`aiken_sos_feed.py` need fixing (completely unverified -- see README
+"Known limitations") or `AIKEN_SOS_ENABLED` should be set to `false` to
+fall back to civicAPI for that county. A **`Aiken SOS CANDIDATE MATCH
+FAILED`** line means the feed is reachable but a candidate name needs
+adjusting in `aiken_sos_feed.py`'s `*_KEYS` tuples, same fix pattern as
+civicAPI's below.
 
 If you instead see:
 ```

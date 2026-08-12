@@ -62,6 +62,7 @@ fully-counted county contributes zero simulated variance. Full reasoning in
 |---|---|
 | `server.py` | background poller + JSON API. The entrypoint |
 | `civicapi_feed.py` | API client, payload parsing, county name matching (six-way) |
+| `aiken_sos_feed.py` | Aiken County ONLY -- overrides civicAPI's known-glitchy Aiken results with South Carolina's own SOS Election Night Reporting feed |
 | `south_carolina_senate_model.py` | baseline loading, credibility blending, shift shrinkage, regional shift, Monte Carlo runoff/advance simulation |
 | `build_sc_senate_baseline.py` | builds `sc_senate_gop_primary_baseline.csv` from four coalition-proxy source races |
 | `update_turnout_from_actuals.py` | recalibrates that CSV's turnout column from a manually-verified reporting-county snapshot -- rerun with a fresher snapshot as the night progresses |
@@ -86,6 +87,7 @@ CORS is open, so the site can be hosted anywhere.
 | `RACE_ID` | civicAPI race | **unset -- see Known limitations** |
 | `N_SIMS` | Monte Carlo draws | `20000` |
 | `POLL_INTERVAL` | seconds between cycles | `60` |
+| `AIKEN_SOS_ENABLED` | override Aiken County from the SOS feed instead of civicAPI | `true` |
 | `STATE_DIR` | optional disk path so credibility/shift state survives a restart | unset |
 
 ## Known limitations
@@ -160,6 +162,26 @@ CORS is open, so the site can be hosted anywhere.
   routing real-time updates through the new `update_turnout_estimate()`
   method instead, which only touches turnout, or disabling `RACE_ID`
   polling until the feed is trusted again) -- flagged rather than assumed.
+- **The Aiken SOS feed's endpoints are completely UNVERIFIED.**
+  `enr-scvotes.org` disallows automated fetches (robots.txt, and a real
+  test from this sandbox got an actual 403 back from the server itself --
+  worth confirming whether Render's IP fares differently), and its
+  results page is a client-rendered SPA, so `aiken_sos_feed.py`'s
+  `current_ver.txt` / `reports/detailxml.zip` endpoints and
+  `CONTEST_TEXT_HINTS` contest-matching are built against the documented
+  Clarity/Scytl schema (the same platform `enr-scvotes.org` white-labels),
+  not confirmed against a real response. Watch the first deploy's logs for
+  `Aiken SOS override applied` (working) vs. `Aiken SOS feed failed this
+  cycle` (not working, falling back to whatever civicAPI has for Aiken --
+  i.e. the original glitch, unfixed) or a `CANDIDATE MATCH FAILED`/contest-
+  matching error (endpoints reachable but names need adjusting). Set
+  `AIKEN_SOS_ENABLED=false` to disable this and revert to trusting
+  civicAPI for Aiken if the feed can't be made to work.
+- **The Aiken SOS override is unconditional, by design.** It does not
+  require agreement with civicAPI before applying (unlike this family's
+  other cross-checked sub-feeds) -- a >5% disagreement is logged as a
+  warning, not treated as a reason to fall back, since the entire point is
+  that civicAPI is already known to be wrong for this county.
 - **State is in memory.** A restart costs the credibility/shift calibration
   until counties report again. Set `STATE_DIR` to a mounted disk to avoid
   that.

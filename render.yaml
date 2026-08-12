@@ -30,6 +30,15 @@ services:
         value: "20000"
       - key: POLL_INTERVAL
         value: "60"
+      - key: AIKEN_SOS_ENABLED
+        value: "true"  # Overrides Aiken County's results with South
+                       # Carolina's own SOS Election Night Reporting feed
+                       # (aiken_sos_feed.py) instead of civicAPI, which is
+                       # known to glitch for that one county. UNVERIFIED
+                       # endpoint -- watch the first deploy's logs for
+                       # "Aiken SOS override applied" vs "Aiken SOS feed
+                       # failed"; set to "false" to fall back to civicAPI
+                       # for Aiken if the SOS feed turns out not to work.
 
       # Optional. Set this to a mounted Render disk path (for example /var/data) if
       # you want county turnout/reporting state to survive a restart.
