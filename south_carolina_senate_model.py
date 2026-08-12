@@ -381,8 +381,28 @@ class SouthCarolinaSenateModel:
         counties_list = list(self.counties.keys())
         n_county = len(counties_list)
 
-        counted_votes = np.array([[self.counties[n].votes[c] for c in CANDIDATES]
-                                   for n in counties_list], dtype=float)
+        # IMPORTANT: for an "overshoot" county (counted votes already exceed
+        # its effective_turnout -- remaining <= 0), project_shares() scales
+        # that county's raw split DOWN proportionally to effective_turnout
+        # rather than using its true, uncapped vote counts. counted_votes
+        # here has to do the exact same thing, or this simulation's
+        # zero-noise baseline stops matching project()'s point estimate --
+        # which is exactly the bug that flipped Norman/Fry's ranking on
+        # 2026-08-12: a corrupted, massively overshot county's TRUE vote
+        # counts dominated this array while project() had already
+        # discounted that same county's influence. Both now treat an
+        # overshoot county identically: proportionally capped to
+        # effective_turnout, matching County.raw_shares' percentages.
+        capped_votes = []
+        for name in counties_list:
+            c = self.counties[name]
+            remaining_c = max(0.0, c.effective_turnout - c.counted_votes)
+            if remaining_c <= 0 and c.counted_votes > 0:
+                raw = c.raw_shares
+                capped_votes.append([raw[cand] / 100.0 * c.effective_turnout for cand in CANDIDATES])
+            else:
+                capped_votes.append([c.votes[cand] for cand in CANDIDATES])
+        counted_votes = np.array(capped_votes, dtype=float)
         remaining = np.array([max(0.0, self.counties[n].effective_turnout -
                                    self.counties[n].counted_votes)
                                for n in counties_list], dtype=float)
