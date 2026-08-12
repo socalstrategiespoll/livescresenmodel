@@ -142,6 +142,27 @@ def extract_six_way(candidate_list: list) -> tuple:
     return votes, matched
 
 
+def normalize_pct_reporting(value):
+    """civicAPI's percent_reporting field format was never confirmed
+    against a real payload (see this module's docstring), and the live
+    data strongly suggests it's on a 0-100 SCALE, not the 0-1 FRACTION
+    every pct_reporting consumer in this codebase assumes -- observed
+    symptom: projected turnout collapsing to almost exactly 0.4x baseline
+    (the TURNOUT_CLAMP floor) almost immediately, which is exactly what
+    happens when implied_turnout = counted_votes / pct_reporting divides
+    by a number ~100x too large. Any value > 1 is treated as a percentage
+    and divided by 100; values already <= 1 (a real fraction, or 0) pass
+    through unchanged. Remove this the moment the real payload format is
+    confirmed and this turns out to be unnecessary (or wrong)."""
+    if value is None:
+        return None
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None
+    return value / 100.0 if value > 1.0 else value
+
+
 def parse_payload(payload: dict, county_names) -> dict:
     """Turn a civicAPI race payload into county-level six-way vote counts."""
     lookup = build_county_lookup(county_names)
@@ -167,13 +188,13 @@ def parse_payload(payload: dict, county_names) -> dict:
 
         records[county] = {
             "votes": votes,
-            "percent_precincts": region.get("percent_reporting"),
+            "percent_precincts": normalize_pct_reporting(region.get("percent_reporting")),
         }
 
     return {
         "election_name": payload.get("election_name"),
         "last_updated": payload.get("last_updated"),
-        "percent_precincts_statewide": payload.get("percent_reporting"),
+        "percent_precincts_statewide": normalize_pct_reporting(payload.get("percent_reporting")),
         "state_votes": state_votes,
         "candidate_names": matched_names,
         "counties": records,

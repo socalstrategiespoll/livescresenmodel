@@ -111,6 +111,17 @@ CORS is open, so the site can be hosted anywhere.
   `TURNOUT_FULL_TRUST_PCT` so a tiny early batch can't imply something
   wild. This only runs when `percent_reporting` is a real nonzero value --
   with none supplied, effective turnout is left exactly where it was.
+- **`percent_reporting` is very likely on a 0-100 scale, not the 0-1
+  fraction this codebase originally assumed.** Live data on 2026-08-12
+  showed projected turnout collapsing to almost exactly 0.4x the baseline
+  statewide (the `TURNOUT_CLAMP` floor) within one cycle, alongside every
+  simulated interval going zero-width (`sigma` collapsing to 0) --
+  precisely the signature of `counted_votes / percent_reporting` dividing
+  by a number ~100x too large. `civicapi_feed.py`'s new
+  `normalize_pct_reporting()` now divides any value > 1 by 100 before it
+  reaches the model, on both the per-county and statewide fields. Verify
+  this against a real payload and remove it if it turns out to be
+  unnecessary (or wrong in the other direction).
 - **The baseline is a coalition-proxy construction, not a direct poll of
   this primary.** It's built from four different source races (an actual
   Graham-vs-Lynch Senate primary, Norman's own gubernatorial primary
